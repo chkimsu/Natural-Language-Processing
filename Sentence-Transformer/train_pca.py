@@ -8,10 +8,9 @@ import torch
 
 from torch.utils.tensorboard import SummaryWriter
 from larva import LarvaTokenizer, LarvaModel
-from sentence_transformers import SentenceTransformer, LoggingHandler, losses, models, util
-from sentence_transformers.evaluation import EmbeddingSimilarityEvaluator, BinaryClassificationEvaluator
+from sentence_transformers import SentenceTransformer, LoggingHandler, losses, models
+from sentence_transformers.evaluation import BinaryClassificationEvaluator
 
-from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.multiprocessing as mp
 import torch.distributed as dist
 from sentence_transformers.pair_data import PairData
@@ -20,7 +19,6 @@ import glob
 import random
 import pickle
 import numpy as np
-import os
 import shutil
 
 
@@ -61,7 +59,6 @@ def train(gpu, ngpus_per_node, args):
 
     # 2. path
     train_data_path = args.data_dir + "/" + args.train_dir + "/"
-    valid_data_path = args.data_dir + '/valid/'
     test_data_path = args.data_dir + '/test/'
 
 
@@ -88,8 +85,6 @@ def train(gpu, ngpus_per_node, args):
     sbert_model = SentenceTransformer(modules=[word_embedding_model,cnn, pooling_model], device=device)
 
     # 4. data loader
-    # valid_pair = PairData(valid_data_path)
-    # valid_samples = valid_pair.get_example(shuffle=False, num_data=args.valid_size, gpu=args.gpu)
 
 
     logging.debug('Validataion dataset is same to test data set : rf_hdfs')
@@ -127,10 +122,15 @@ def train(gpu, ngpus_per_node, args):
     writer = SummaryWriter(args.tensorboard_path + "/" + model_output_name)
 
     # 7. train
-    output_model_dir = args.output_model_dir + '/' + model_output_name ##잔오류 수정입니다. 
+    output_model_dir = args.output_model_dir + '/' + model_output_name ##잔오류 수정입니다.
+    if args.loss_type == "on_cont_cross_ent_mt":
+        train_objectives = [(train_data_iter, train_loss_1),
+                           (train_data_iter, train_loss_2)]
+    else:
+        train_objectives = [(train_data_iter, train_loss)]
+
     sbert_model.fit(
-        train_objectives=[(train_data_iter, train_loss)],
-        # train_objectives=[(train_data_iter, train_loss_1), (train_data_iter, train_loss_2)],
+        train_objectives=train_objectives,
         evaluator=evaluator,
         epochs=args.epochs,
         evaluation_steps=evaluation_steps,
@@ -227,10 +227,10 @@ def test(args):
             os.makedirs(embed_dir)
 
 
-        with open(embed_dir + '/embdding_vector_pca.npy'.format(model_output_name), 'wb') as f:
+        with open(f"{embed_dir}/embdding_vector_pca.npy", 'wb') as f:
             np.save(f, pca_comp)
 
-        with open(embed_dir + '/query_sample_list.pkl'.format(model_output_name), 'wb') as file:
+        with open(f"{embed_dir}/query_sample_list.pkl", 'wb') as file:
             pickle.dump(random_query, file)
 
         logging.debug('Saving embed and list of query is done!!!!')
