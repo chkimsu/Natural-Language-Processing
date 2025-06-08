@@ -1,9 +1,6 @@
 import glob
-import torch
 import random
 import logging
-
-from random import choices
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from sentence_transformers.readers import InputExample
